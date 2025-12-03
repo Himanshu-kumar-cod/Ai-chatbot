@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Textile Chatbot Widget</title>
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --accent:#06b6d4;
+      --muted:#94a3b8;
+      --text:#e6eef6;
+      --glass: rgba(255,255,255,0.03);
+      --radius:14px;
+      --shadow: 0 6px 20px rgba(5,8,15,0.6);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    /* Floating button */
+    .chat-toggle {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg,var(--accent), #7c3aed);
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: white;
+      box-shadow: var(--shadow);
+      border: none;
+      cursor: pointer;
+      z-index: 9999;
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .chat-toggle:active{ transform: scale(.97); }
+    .chat-toggle:focus{ outline: 3px solid rgba(6,182,212,.16); }
+
+    /* Chat window */
+    .chat-panel {
+      position: fixed;
+      right: 20px;
+      bottom: 100px;
+      width: 360px;
+      max-width: calc(100% - 40px);
+      height: 520px;
+      max-height: calc(100% - 140px);
+      background: linear-gradient(180deg, rgb(13, 35, 233), rgb(140, 16, 157));
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 9998;
+      transform-origin: bottom right;
+      border: 1px solid rgba(255,255,255,0.03);
+    }
+    .chat-header {
+      display:flex;
+      gap:12px;
+      align-items:center;
+      padding:14px;
+      background: linear-gradient(90deg, rgba(6,182,212,0.06), rgba(124,58,237,0.03));
+      border-bottom: 1px solid rgba(255,255,255,0.02);
+    }
+    .chat-title { font-weight: 700; color: var(--text); font-size: 15px; }
+    .chat-sub { font-size: 12px; color: var(--muted); margin-left:auto; }
+
+    .messages {
+      padding: 12px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.005), transparent);
+    }
+
+    .msg {
+      max-width: 78%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      line-height: 1.3;
+      font-size: 14px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.2) inset;
+      word-break: break-word;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: linear-gradient(180deg,#0ea5a6,#0891b2);
+      color: white;
+      border-bottom-right-radius: 6px;
+    }
+    .msg.bot {
+      align-self: flex-start;
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      border-bottom-left-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.02);
+    }
+    .meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .input-area {
+      display:flex;
+      gap:8px;
+      padding: 10px;
+      border-top: 1px solid rgba(255,255,255,0.02);
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+    }
+    .input-area input {
+      flex: 1;
+      padding: 12px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.03);
+      color: var(--text);
+      border-radius: 10px;
+      font-size: 14px;
+      outline: none;
+    }
+    .input-area input::placeholder{ color: rgba(255,255,255,0.25); }
+    .send-btn {
+      background: var(--accent);
+      border: none;
+      color: white;
+      padding: 10px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .hidden { display:none; }
+
+    /* Small screen adjustments */
+    @media (max-width:420px){
+      .chat-panel { right: 10px; left: 10px; width: auto; bottom: 90px; height: 68vh; }
+      .chat-toggle { right: 14px; bottom: 14px; }
+    }
+
+    /* tiny loading spinner */
+    .loader {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.12);
+      border-top-color: white;
+      animation: spin 1s linear infinite;
+      display:inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body style="background:var(--bg); min-height:100vh; color:var(--text);">
+    <img src="https://png.pngtree.com/thumb_back/fh260/background/20210908/pngtree-clothes-in-a-clothing-store-image_827085.jpg" width="1030" height="800">
+  <!-- Floating toggle button -->
+  <button aria-label="Open chat" id="chatToggle" class="chat-toggle" title="Chat with us">
+    <!-- simple chat icon (SVG) -->
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  </button>
+
+  <!-- Chat panel (hidden by default) -->
+  <div id="chatPanel" class="chat-panel hidden" role="dialog" aria-hidden="true" aria-label="Chat widget">
+    <div class="chat-header">
+      <div style="display:flex;flex-direction:column;">
+        <div class="chat-title">Textile Assistant</div>
+        <div class="meta" style="margin-top:6px;font-size:12px;color:var(--muted)">We're here to help — ask about fabrics, orders, returns...</div>
+      </div>
+      <div class="chat-sub" id="statusArea" aria-live="polite">Online</div>
+    </div>
+
+    <div id="messages" class="messages" role="log" aria-live="polite" aria-relevant="additions">
+      <!-- messages inserted here -->
+    </div>
+
+    <div class="input-area">
+      <input id="inputBox" placeholder="Type a message and press Enter..." aria-label="Message input" autocomplete="off" />
+      <button id="sendBtn" class="send-btn">Send</button>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      // Configuration: change if your API endpoint differs
+      const API_URL = "http://localhost:5000/api/chat"; // POST { message } => { reply }
+      // You can set this to your full backend URL if served elsewhere (e.g., https://example.com/api/chat)
+
+      const chatToggle = document.getElementById('chatToggle');
+      const chatPanel = document.getElementById('chatPanel');
+      const messagesEl = document.getElementById('messages');
+      const inputBox = document.getElementById('inputBox');
+      const sendBtn = document.getElementById('sendBtn');
+      const statusArea = document.getElementById('statusArea');
+
+      let open = false;
+      let isSending = false;
+      const STORAGE_KEY = 'textile_chat_history_v1';
+
+      chatToggle.addEventListener('click', toggleChat);
+      sendBtn.addEventListener('click', onSend);
+      inputBox.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter') onSend();
+      });
+
+      // Toggle open/close
+      function toggleChat(){
+        open = !open;
+        chatPanel.classList.toggle('hidden', !open);
+        chatPanel.setAttribute('aria-hidden', (!open).toString());
+        if(open){
+          inputBox.focus();
+          // restore history
+          renderHistory();
+          // scroll to bottom
+          scrollBottom();
+        }
+      }
+
+      // Utility: append message to DOM and optionally save
+      function appendMessage(who, text, save=true){
+        const wrapper = document.createElement('div');
+        wrapper.className = 'msg ' + (who === 'user' ? 'user' : 'bot');
+        wrapper.textContent = text;
+        messagesEl.appendChild(wrapper);
+
+        // tiny meta for bot
+        if(who === 'bot'){
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          meta.textContent = 'Reply';
+          wrapper.appendChild(meta);
+        }
+
+        if(save) {
+          saveToHistory({ who, text, t: Date.now() });
+        }
+        scrollBottom();
+      }
+
+      function scrollBottom(){
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      // Save/load history (simple localStorage)
+      function saveToHistory(item){
+        try{
+          const arr = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+          arr.push(item);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(arr.slice(-200))); // cap at 200 messages
+        }catch(e){ console.warn('history save failed', e); }
+      }
+      function loadHistory(){
+        try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e){ return []; }
+      }
+      function clearHistory(){
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      function renderHistory(){
+        messagesEl.innerHTML = '';
+        const hist = loadHistory();
+        for(const item of hist){
+          const d = new Date(item.t || Date.now());
+          appendMessage(item.who, item.text, false); // avoid saving again
+        }
+      }
+
+      // Show temporary status
+      function setStatus(text){
+        statusArea.textContent = text;
+      }
+
+      // Send message to backend
+      async function askBackend(message){
+        // Show a temporary loading bot message element and return a callback to replace it
+        const loading = document.createElement('div');
+        loading.className = 'msg bot';
+        const spinner = document.createElement('span');
+        spinner.className = 'loader';
+        spinner.setAttribute('aria-hidden','true');
+        loading.appendChild(spinner);
+        const txt = document.createElement('div');
+        txt.style.display = 'inline-block';
+        txt.style.marginLeft = '8px';
+        txt.textContent = 'Thinking...';
+        loading.appendChild(txt);
+        messagesEl.appendChild(loading);
+        scrollBottom();
+
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(()=> controller.abort(), 30000); // 30s timeout
+
+          const res = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message }),
+            signal: controller.signal
+          });
+          clearTimeout(timeout);
+
+          if(!res.ok){
+            throw new Error('Server returned ' + res.status);
+          }
+          const data = await res.json();
+          const reply = (data && (data.reply || data.answer || data.response)) || 'Sorry — no reply from server.';
+
+          // remove loading, add final bot message
+          messagesEl.removeChild(loading);
+          appendMessage('bot', reply, true);
+          setStatus('Online');
+          return reply;
+        } catch (err){
+          // remove loading
+          try{ messagesEl.removeChild(loading); } catch(e){}
+          const failText = 'Sorry — failed to reach server. ' + (err.name === 'AbortError' ? '(timeout)' : '');
+          appendMessage('bot', failText, true);
+          setStatus('Offline');
+          console.error('chat error', err);
+          throw err;
+        }
+      }
+
+      // Handler when user clicks send or presses Enter
+      async function onSend(){
+        const text = inputBox.value.trim();
+        if(!text || isSending) return;
+        isSending = true;
+        appendMessage('user', text, true);
+        inputBox.value = '';
+        inputBox.focus();
+        setStatus('Sending...');
+        try{
+          await askBackend(text);
+        } catch(e){
+          // already handled in askBackend
+        } finally {
+          isSending = false;
+          setStatus('Online');
+        }
+      }
+
+      // Initial render (don't open the panel)
+      renderHistory();
+
+      // Optional: allow pressing ESC to close panel when open
+      document.addEventListener('keydown', e => {
+        if(e.key === 'Escape' && open) toggleChat();
+      });
+
+      // Accessibility: if user navigates to the button via keyboard, show panel
+      chatToggle.addEventListener('keyup', (e)=> {
+        if(e.key === 'Enter' || e.key === ' ') toggleChat();
+      });
+
+      // Expose a small window-level API for debugging / external control
+      window._textileChat = {
+        openPanel: () => { if(!open) toggleChat(); },
+        closePanel: () => { if(open) toggleChat(); },
+        clearHistory,
+        sendMessageDirect: (msg) => {
+          inputBox.value = msg;
+          onSend();
+        }
+      };
+    })();
+  </script>
+
+</body>
+</html>
